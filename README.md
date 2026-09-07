@@ -77,6 +77,11 @@ expected sequence. This layer is not further described here.
 
 #### Running tests
 
+This repo demand little modification at CVA6 & AXI end (below are the desired commit for the same!!) 
+
+https://github.com/planvtech/cva6/tree/338d4c1e8df55363a57ac3e936ffc6ce86e7e016
+https://github.com/planvtech/axi_llc/tree/39355b975eb9618761e40711e299d19a8833f5cd
+
 Tests are run in the [`tests/integration`](tests/integration) directory. All commands below are executed in this directory.
 
 To run a test in the CITS, type
