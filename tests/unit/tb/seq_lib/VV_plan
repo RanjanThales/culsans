@@ -1,0 +1,89 @@
+ACE Interconnect Verification Test Scenarios
+What Makes a "Scenario" in ACE
+In ACE parlance, a "scenario" is a combination of: transaction type, initiating master cache status, responding master(s) cache status, and response value(s). With 8 full ACE masters in an interconnect, this can yield thousands of permutations — though many are illegal (e.g., two masters cannot simultaneously hold the same data in the Unique or Dirty state), so verification is reduced to only the relevant permutations. Chipestimate
+
+1. Transaction-Type Scenarios
+These cover all ACE read/write/snoop transaction types:
+
+ReadShared — master reads data it intends to share with others
+ReadUnique — master reads data with exclusive ownership
+ReadClean — master reads clean data without taking dirty responsibility
+MakeUnique — master upgrades a shared line to unique without fetching data
+MakeInvalid — master invalidates all cached copies
+CleanUnique — master cleans and takes unique ownership
+WriteBack — master writes dirty data back to memory
+WriteClean — master writes data while keeping a clean copy
+Evict — master silently drops a shared clean line
+
+
+2. Cache State Transition Scenarios (MOESI/MESI)
+Each transaction is tested against combinations of cache line states:
+
+Invalid (I) → Shared Clean (SC): e.g., ReadShared from a master with no copy
+Shared Clean (SC) → Unique Clean (UC): e.g., MakeUnique
+Unique Clean (UC) → Unique Dirty (UD): e.g., a store/write
+Unique Dirty (UD) → Invalid (I): e.g., WriteBack/Evict
+
+A key example: when M4 (cache in Invalid state) sends a ReadShared, the interconnect does a speculative fetch and snoops M3 (cache in Shared Clean). M3 responds with DATA_TRANSFER, NO_PASS_DIRTY, IS_SHARED, retains its cache line state, and M4 transitions from Invalid to Shared Clean. Design Reuse
+
+3. Single-Master Protocol Compliance Scenarios
+At the atomic transaction level, the driver generates legal transactions considering cache line state. Additional constraints ensure, for example, that a WriteBack burst is not generated for a CLEAN cache line. Design Reuse
+These include:
+
+Verifying correct snoop response signals (PassDirty, IsShared, DataTransfer)
+Correct handling of RACK/WACK handshakes
+Proper ordering of read/write address and data channels
+ID ordering and interleaving rules
+
+
+4. Multi-Master / Virtual Sequence Scenarios
+When defining interesting ACE scenarios, activity must be coordinated between multiple masters using a virtual sequence. For example: Master M4 sends ReadShared; the interconnect snoops M3; M3 responds; M4 updates its cache state. The interconnect monitor is the only component with a full view of all interfaces, making it essential for verifying full system coherency. Design Reuse
+Key multi-master scenarios include:
+
+Simultaneous reads to the same address from two or more masters
+Read-after-write hazards across different masters
+Back-to-back transactions with overlapping IDs
+Race conditions between a snoop and an ongoing write
+
+
+5. Barrier Transaction Scenarios
+ACE supports Barrier transactions, which cause a halt in processing until a condition is met. When a master sends a barrier transaction, commands issued before the barrier must complete before the barrier takes effect. With multiple cores potentially issuing barrier transactions simultaneously, the burden on the interconnect and the verification engineer multiplies significantly. Chipestimate
+Test scenarios include:
+
+Read Barrier followed by subsequent reads
+Write Barrier ordering guarantees
+Barrier propagation with concurrent snoops in flight
+
+
+6. Snoop Filter Scenarios
+The ACE specification supports "snoop filtering," which reduces snooping activities. If the DUT doesn't support snoop filtering, the VIP's cache mirror must capture all cache state changes. If a snoop filter is present, the interconnect monitor verifies that a master holding no copy at a given address is not unnecessarily snooped. Embedded
+
+7. DVM (Distributed Virtual Memory) Scenarios
+These apply to ACE-Lite interfaces and cover:
+
+TLB invalidation messages across interconnect
+Branch predictor invalidation
+Virtual address/ASID-based coherency
+DVM sync/complete handshake verification
+
+
+8. Coherency Checking Scenarios (System-Level)
+The interconnect monitor can verify that a transaction from a master reaches all needed snooped masters in the coherency domain, that if there was a speculative fetch the data came from the right source(s), and that data was not returned before all snoop partners had responded. Design Reuse
+Specific checks include:
+
+Data integrity — data returned to requester matches what was in the cache/memory
+Speculative fetch correctness — data sourced correctly when pre-fetched
+No stale data — no master receives outdated data after another master has written
+
+
+9. Coverage-Driven Scenarios
+The ACE verification solution must define all required coverage points. Three major elements are needed: constrained random stimulus to mimic all possible scenarios; complete protocol compliance checks at each interface; and a coverage model to measure and confirm verification completeness. Design Reuse
+
+Hierarchical Testing Strategy
+An effective hierarchical testing strategy progresses from simple sequences to more complex ones. The aim is to catch as many bugs with the simpler sequences so that as verification moves to more complex sequences — where the problem space is much larger — fewer bugs remain to be found. Design Reuse
+In practice this means:
+
+Level 1: Single-master, single-transaction compliance tests
+Level 2: Two-master coherency interactions (snoop, response)
+Level 3: N-master concurrent stress tests with barriers and DVM
+Level 4: Full constrained-random regression with coverage closure
